@@ -986,9 +986,21 @@ class TablibTestCase(unittest.TestCase):
         self.assertEqual(data.height, data_.height)
         self.assertEqual(data[0], data_[0])
 
+    @given(generate_dataset())
+    def test_transpose_twice(self, dataset):
+        data, headers = dataset
+        data = tablib.Dataset(*data, headers=headers)
+
+        data_ = data.transpose().transpose()
+
+        print(data, 'original', '\n-----------\n')
+        print(data.transpose(), 'transpose', '\n-----------\n')
+        print(data_, 'back', '\n-----------\n')
+        self.assertEqual(data.width, data_.width)
+        self.assertEqual(data.height, data_.height)
+        self.assertEqual(data[0], data_[0])
+
 
 
 if __name__ == '__main__':
     unittest.main()
-
-    # sort_columns(tablib.Dataset(['a', 'b', 'c', 'd'], headers=['a', 'aa', 'b', 'c']), ['a', 'c', 'b', 'aa'])
