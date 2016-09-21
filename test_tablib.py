@@ -5,10 +5,36 @@
 import json
 import unittest
 import sys
-import os
+
+from hypothesis import given, strategies as st
+
+
 import tablib
 from tablib.compat import markup, unicode, is_py3
 from tablib.core import Row
+
+
+def _generate_dataset(n):
+    import string; alphabet = string.ascii_lowercase
+    alphabet = None
+
+    generate_cell = st.one_of(st.integers(), st.text(alphabet, min_size=1), st.floats(allow_nan=False), st.booleans())
+    generate_row = st.lists(generate_cell, min_size=n, max_size=n)
+    generate_data = st.lists(generate_row, min_size=1)
+    generate_headers = st.lists(st.text(alphabet, min_size=1), unique=True, min_size=n, max_size=n)
+
+    return st.tuples(generate_data, generate_headers)
+
+
+def generate_dataset():
+    return st.one_of(*[_generate_dataset(n) for n in range(2, 100)])
+
+
+def sort_columns(data, ordered_headers):
+    assert sorted(ordered_headers) == sorted(data.headers)
+    order = [data.headers.index(x) for x in ordered_headers]
+    ordered_data = [[row[i] for i in order] for row in data._data]
+    return tablib.Dataset(*ordered_data, headers=ordered_headers)
 
 
 class TablibTestCase(unittest.TestCase):
@@ -36,9 +62,12 @@ class TablibTestCase(unittest.TestCase):
         """Teardown."""
         pass
 
-    def test_empty_append(self):
+    @given(st.lists(st.integers(), min_size=2))
+    def test_empty_append(self, new_row):
         """Verify append() correctly adds tuple with no headers."""
-        new_row = (1, 2, 3)
+        data = tablib.Dataset()
+        new_row = tuple(new_row)
+
         data.append(new_row)
 
         # Verify width/data
@@ -933,6 +962,33 @@ class TablibTestCase(unittest.TestCase):
         """Test XLSX export with formatter configuration."""
         self.founders.export('xlsx', freeze_panes=False)
 
+    @given(generate_dataset())
+    def test_json_export_import_works(self, dataset):
+        data, headers = dataset
+        data = tablib.Dataset(*data, headers=headers)
+
+        json_ = data.json
+        data_ = tablib.import_set(json_)
+
+        self.assertEqual(data.width, data_.width)
+        self.assertEqual(data.height, data_.height)
+        self.assertEqual(data[0], sort_columns(data_, data.headers)[0])
+
+    @given(generate_dataset())
+    def test_csv_export_import_works(self, dataset):
+        data, headers = dataset
+        data = tablib.Dataset(*data, headers=headers)
+
+        csv_ = data.csv
+        data_ = tablib.import_set(csv_)
+
+        self.assertEqual(data.width, data_.width)
+        self.assertEqual(data.height, data_.height)
+        self.assertEqual(data[0], data_[0])
+
+
 
 if __name__ == '__main__':
     unittest.main()
+
+    # sort_columns(tablib.Dataset(['a', 'b', 'c', 'd'], headers=['a', 'aa', 'b', 'c']), ['a', 'c', 'b', 'aa'])
